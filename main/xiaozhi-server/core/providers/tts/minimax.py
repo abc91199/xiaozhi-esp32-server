@@ -46,7 +46,7 @@ class TTSProvider(TTSProviderBase):
         if self.voice:
             self.voice_setting["voice_id"] = self.voice
 
-        self.host = "api.minimax.chat"
+        self.host = "api.minimax.io"
         self.api_url = f"https://{self.host}/v1/t2a_v2?GroupId={self.group_id}"
         self.header = {
             "Content-Type": "application/json",
@@ -68,6 +68,7 @@ class TTSProvider(TTSProviderBase):
             "voice_setting": self.voice_setting,
             "pronunciation_dict": self.pronunciation_dict,
             "audio_setting": self.audio_setting,
+            "language_boost": "Chinese,Yue",
         }
 
         if type(self.timber_weights) is list and len(self.timber_weights) > 0:
