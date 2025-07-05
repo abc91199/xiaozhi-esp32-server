@@ -8,7 +8,6 @@ from config.logger import setup_logging
 from core.utils.util import get_local_ip, validate_mcp_endpoint
 from core.http_server import SimpleHttpServer
 from core.websocket_server import WebSocketServer
-from core.device_trigger_server import DeviceTriggerServer
 from core.utils.util import check_ffmpeg_installed
 
 TAG = __name__
@@ -64,13 +63,6 @@ async def main():
     # 启动 Simple http 服务器
     ota_server = SimpleHttpServer(config)
     ota_task = asyncio.create_task(ota_server.start())
-    # 启动 Device Trigger 服务器
-    trigger_server = DeviceTriggerServer(config, ws_server)
-    # Wait a moment for WebSocket server to initialize
-    await asyncio.sleep(1)
-    trigger_server.set_websocket_server(ws_server)
-    trigger_port = int(config.get("server", {}).get("trigger_port", 8008))
-    trigger_task = asyncio.create_task(trigger_server.start(port=trigger_port))
 
     read_config_from_api = config.get("read_config_from_api", False)
     port = int(config["server"].get("http_port", 8003))
@@ -85,11 +77,17 @@ async def main():
         get_local_ip(),
         port,
     )
-    logger.bind(tag=TAG).info(
-        "设备触发接口是\thttp://{}:{}/api/info",
-        get_local_ip(),
-        trigger_port,
-    )
+    mcp_endpoint = config.get("mcp_endpoint", None)
+    if mcp_endpoint is not None and "你" not in mcp_endpoint:
+        # 校验MCP接入点格式
+        if validate_mcp_endpoint(mcp_endpoint):
+            logger.bind(tag=TAG).info("mcp接入点是\t{}", mcp_endpoint)
+            # 将mcp计入点地址转成调用点
+            mcp_endpoint = mcp_endpoint.replace("/mcp/", "/call/")
+            config["mcp_endpoint"] = mcp_endpoint
+        else:
+            logger.bind(tag=TAG).error("mcp接入点不符合规范")
+            config["mcp_endpoint"] = "你的接入点 websocket地址"
 
     # 获取WebSocket配置，使用安全的默认值
     websocket_port = 8000
@@ -123,18 +121,10 @@ async def main():
         ws_task.cancel()
         if ota_task:
             ota_task.cancel()
-        if trigger_task:
-            trigger_task.cancel()
 
         # 等待任务终止（必须加超时）
-        tasks_to_wait = [stdin_task, ws_task]
-        if ota_task:
-            tasks_to_wait.append(ota_task)
-        if trigger_task:
-            tasks_to_wait.append(trigger_task)
-        
         await asyncio.wait(
-            tasks_to_wait,
+            [stdin_task, ws_task, ota_task] if ota_task else [stdin_task, ws_task],
             timeout=3.0,
             return_when=asyncio.ALL_COMPLETED,
         )
