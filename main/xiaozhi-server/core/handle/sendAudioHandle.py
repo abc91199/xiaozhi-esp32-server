@@ -34,7 +34,9 @@ emoji_map = {
 
 async def sendAudioMessage(conn, sentenceType, audios, text):
     # 发送句子开始消息
-    conn.logger.bind(tag=TAG).info(f"发送音频消息: {sentenceType}, {text}")
+    audio_count = len(audios) if audios else 0
+    conn.logger.bind(tag=TAG).info(f"🎵 音频播放: {sentenceType.name} - {audio_count} 个包, 文本: {text}")
+    
     if text is not None:
         emotion = analyze_emotion(text)
         emoji = emoji_map.get(emotion, "🙂")  # 默认使用笑脸
@@ -50,18 +52,23 @@ async def sendAudioMessage(conn, sentenceType, audios, text):
         )
     pre_buffer = False
     if conn.tts.tts_audio_first_sentence and text is not None:
-        conn.logger.bind(tag=TAG).info(f"发送第一段语音: {text}")
+        conn.logger.bind(tag=TAG).info(f"🎵 第一段语音: {text}")
         conn.tts.tts_audio_first_sentence = False
         pre_buffer = True
 
+    conn.logger.bind(tag=TAG).info(f"📤 发送sentence_start: {text}")
     await send_tts_message(conn, "sentence_start", text)
 
+    conn.logger.bind(tag=TAG).info(f"🎧 开始发送音频: {audio_count} 个包")
     await sendAudio(conn, audios, pre_buffer)
+    conn.logger.bind(tag=TAG).info(f"✅ 音频发送完成: {audio_count} 个包")
 
+    conn.logger.bind(tag=TAG).info(f"📤 发送sentence_end: {text}")
     await send_tts_message(conn, "sentence_end", text)
 
     # 发送结束消息（如果是最后一个文本）
     if conn.llm_finish_task and sentenceType == SentenceType.LAST:
+        conn.logger.bind(tag=TAG).info("📤 发送stop消息")
         await send_tts_message(conn, "stop", None)
         conn.client_is_speaking = False
         if conn.close_after_chat:
